@@ -1,6 +1,7 @@
 import { fetchWithTimeout } from "../../shared/utils";
 import { readAuthConfig, type AuthProvider } from "../../shared/auth";
 import type { ClaudeUsageResponse } from "./types";
+import type { ClaudeOAuthCredentials } from "./oauth-credentials";
 
 const ANTHROPIC_API_BASE_URL = "https://api.anthropic.com";
 
@@ -21,15 +22,12 @@ export class ClaudeClient {
   }
 
   /**
-   * Fetches usage data from Claude API
+   * Fetches usage data from Claude's OAuth usage endpoint using a bearer
+   * token. Shared by both the OpenCode auth.json ("apiKey") path and the
+   * Claude Code CLI OAuth credential path so both map to the exact same
+   * internal representation.
    */
-  private async fetchClaudeUsage(authData: AuthProvider): Promise<ClaudeUsageResponse> {
-    const token = authData.access || authData.refresh;
-
-    if (!token) {
-      throw new Error("No token found in Anthropic auth data");
-    }
-
+  private async fetchUsageWithToken(token: string): Promise<ClaudeUsageResponse> {
     const url = `${this.apiBaseUrl}/api/oauth/usage`;
     const response = await fetchWithTimeout(url, {
       headers: this.buildClaudeHeaders(token),
@@ -44,28 +42,45 @@ export class ClaudeClient {
   }
 
   /**
-   * Fetches Claude usage data
+   * Fetches Claude usage data using OpenCode's own stored Anthropic
+   * credentials (`~/.local/share/opencode/auth.json`). This is the
+   * pre-existing "apiKey" authentication path and is unchanged.
    */
-  async fetchUsage(): Promise<ClaudeUsageResponse | null> {
+  async fetchUsageApiKey(): Promise<ClaudeUsageResponse | null> {
     const authConfig = readAuthConfig();
 
     if (!authConfig) {
       return null;
     }
 
-    const authData = authConfig.anthropic;
+    const authData: AuthProvider | undefined = authConfig.anthropic;
 
     if (!authData) {
       return null;
     }
 
-    return this.fetchClaudeUsage(authData);
+    const token = authData.access || authData.refresh;
+
+    if (!token) {
+      throw new Error("No token found in Anthropic auth data");
+    }
+
+    return this.fetchUsageWithToken(token);
   }
 
   /**
-   * Checks if Claude is configured
+   * Fetches Claude usage data using Claude Code CLI OAuth credentials
+   * (macOS Keychain, `.credentials.json`, or `CLAUDE_CODE_OAUTH_TOKEN`).
    */
-  isConfigured(): boolean {
+  async fetchUsageOAuth(credentials: ClaudeOAuthCredentials): Promise<ClaudeUsageResponse> {
+    return this.fetchUsageWithToken(credentials.accessToken);
+  }
+
+  /**
+   * Checks if Claude is configured via OpenCode's own auth.json
+   * ("apiKey" authentication path).
+   */
+  isConfiguredApiKey(): boolean {
     const authConfig = readAuthConfig();
     return !!authConfig?.anthropic;
   }
