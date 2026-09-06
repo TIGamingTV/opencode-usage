@@ -2,11 +2,42 @@ import { sendIgnoredMessage, showToast } from "./shared/notification";
 import { getCurrentSession, getAllSessions } from "./tracking/tracker";
 import { registry } from "./providers/registry";
 import { boxHeader } from "./shared/utils";
+import { getClaudeSimpleUsage } from "./providers/claude";
 
 interface UsageContext {
   client: any;
   sessionID: string;
   params: any;
+}
+
+/**
+ * Compact handler for the /usage-simple command
+ * Shows only Claude Code's 5h/week usage % and reset countdown,
+ * for quick phone-readable checks.
+ */
+export async function handleUsageSimpleCommand(ctx: UsageContext): Promise<void> {
+  const { client, sessionID } = ctx;
+
+  try {
+    await showToast(client, "Fetching Claude usage...", "info");
+
+    const result = await getClaudeSimpleUsage();
+
+    let output: string;
+    if (!result) {
+      output = "Claude Code: not configured.";
+    } else if (result.error) {
+      output = `Claude Code: ${result.error}`;
+    } else {
+      output = result.content;
+    }
+
+    await sendIgnoredMessage(client, sessionID, output);
+    await showToast(client, "Usage updated.", "success");
+  } catch (error) {
+    console.error("Error in handleUsageSimpleCommand:", error);
+    await showToast(client, "Failed to fetch usage metrics.", "error");
+  }
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { handleUsageCommand } from "./lib/usage-handler"
+import { handleUsageCommand, handleUsageSimpleCommand } from "./lib/usage-handler"
 import { state } from "./lib/tracking/types"
 import { addTokens } from "./lib/tracking/tracker"
 
@@ -105,6 +105,10 @@ export const TestPlugin: Plugin = async ({ client }) => {
                 template: "",
                 description: "Shows token usage for all sessions by provider and model",
             }
+            opencodeConfig.command["usage-simple"] = {
+                template: "",
+                description: "Shows Claude Code 5h/week usage % and reset countdown only",
+            }
         },
         "command.execute.before": async (input, output) => {
             if (input.command === "usage") {
@@ -134,6 +138,35 @@ export const TestPlugin: Plugin = async ({ client }) => {
                 }
 
                 throw new Error("__USAGE_COMMAND_HANDLED__")
+            }
+
+            if (input.command === "usage-simple") {
+                try {
+                    const app = client.app
+                    await app.log({
+                        body: {
+                            service: "usage-plugin",
+                            level: "info",
+                            message: "/usage-simple command executed",
+                        },
+                    })
+                    await handleUsageSimpleCommand({
+                        client,
+                        sessionID: input.sessionID,
+                        params: output,
+                    })
+                } catch (err) {
+                    const app = client.app
+                    await app.log({
+                        body: {
+                            service: "usage-plugin",
+                            level: "error",
+                            message: err instanceof Error ? err.message : String(err),
+                        },
+                    })
+                }
+
+                throw new Error("__USAGE_SIMPLE_COMMAND_HANDLED__")
             }
         }
     }

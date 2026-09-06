@@ -18,6 +18,55 @@ export class ClaudeFormatter {
   }
 
   /**
+   * Formats a single quota period as a compact "label: pct% (resets in Xd Xh Xm)" line
+   */
+  private formatSimpleLine(label: string, quota: QuotaPeriod | null): string {
+    if (!quota) {
+      return `${label}: N/A`;
+    }
+
+    const percentUsed = Math.round(quota.utilization);
+    return `${label}: ${percentUsed}%${this.formatSimpleResetSuffix(quota.resets_at)}`;
+  }
+
+  /**
+   * Formats a minute-precision countdown suffix (more granular than formatResetCountdown,
+   * which is useful given the 5-hour window)
+   */
+  private formatSimpleResetSuffix(resetDate: string | undefined): string {
+    if (!resetDate) {
+      return "";
+    }
+
+    const diffMs = new Date(resetDate).getTime() - Date.now();
+    if (diffMs <= 0) {
+      return " (resets soon)";
+    }
+
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (days > 0 || hours > 0) parts.push(`${hours}h`);
+    parts.push(`${minutes}m`);
+
+    return ` (resets in ${parts.join(" ")})`;
+  }
+
+  /**
+   * Formats a minimal two-line summary: 5h and 7-day (week) usage % with reset countdown.
+   * Intended for quick, phone-readable checks.
+   */
+  formatSimple(data: ClaudeUsageResponse): string {
+    const lines: string[] = [];
+    lines.push(this.formatSimpleLine("5h", data.five_hour));
+    lines.push(this.formatSimpleLine("Week", data.seven_day));
+    return lines.join("\n");
+  }
+
+  /**
    * Formats Claude usage data for display
    */
   format(data: ClaudeUsageResponse): string {
